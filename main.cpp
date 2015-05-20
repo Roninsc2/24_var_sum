@@ -18,35 +18,36 @@ TField::TField()
 
 void TField::calculateSpeed_Up(double err[3], double errSpeedUp[3], double* errorA, int k)
 {
-    double input = TwoSum(err[0]*err[0], err[1]*err[1], errorA);
-    input = TwoSum(input, 2*coord.p[0]*err[0], errorA);
-    input = TwoSum(input, 2*coord.p[1]*err[1], errorA);
-    input = TwoSum(input, coord.p[0]*coord.p[0], errorA);
-    input = TwoSum(input, coord.p[1]*coord.p[1], errorA);
-    input = TwoSum(input, *errorA, errorA);
-    double  vectorR = (double )sqrt(input); //+ coord.p[2]*coord.p[2]
-    if (vectorR == 0)
-    {
+    double input = TwoSum(err[0]*err[0], err[1]*err[1], errorA, false);
+    input = TwoSum(input, 2*coord.p[0]*err[0], errorA, false);
+    input = TwoSum(input, 2*coord.p[1]*err[1], errorA, false);
+    input = TwoSum(input, coord.p[0]*coord.p[0], errorA, false);
+    input = TwoSum(input, coord.p[1]*coord.p[1], errorA, false);
+    input = TwoSum(input, *errorA, errorA, true);
+    double  vectorR = sqrt(input); //+ coord.p[2]*coord.p[2]
+    if (vectorR == 0) {
         speedUP.p[0] = 0;
         speedUP.p[1] = 0;
         //speedUP.p[2] = 0;
     }
-    else
-    {
+    else {
         double  vectorA = -1*K/vectorR;
         vectorA /= vectorR;
         vectorA /= vectorR;
-        speedUP.p[0] = TwoSum(coord.p[0]*vectorA,vectorA *err[0], &errSpeedUp[0]);
-        speedUP.p[1] = TwoSum(coord.p[1] * vectorA,vectorA*err[1], &errSpeedUp[1]);
-        if ( k == 100000) {
-            speedUP.p[0] = TwoSum(speedUP.p[0], errSpeedUp[0], &errSpeedUp[0]);
-            speedUP.p[1] = TwoSum(speedUP.p[1], errSpeedUp[1], &errSpeedUp[1]);
+        for (int l = 0; l < 2; l++) {
+             speedUP.p[l] = TwoSum(coord.p[l]*vectorA,vectorA *err[l], &errSpeedUp[l], false);
+        }
+        if ( k == 5) {
+            for (int l = 0; l < 2; l++) {
+                //std::cerr << errSpeedUp[l] << std::endl;
+                speedUP.p[l] = TwoSum(speedUP.p[l], errSpeedUp[l], &errSpeedUp[l], true);
+            }
         }
         //speedUP.p[2] = coord.p[2] * vectorA;
     }
 }
 
-double TField::TwoSum(double a, double b, double* error1)
+double TField::TwoSum(double a, double b, double* error1, bool isNull)
 {
     double x = a + b;
     double b_virt = x - a;
@@ -54,7 +55,11 @@ double TField::TwoSum(double a, double b, double* error1)
     double b_roundoff = b - b_virt;
     double a_roudnoff = a - a_virt;
     double y = a_roudnoff + b_roundoff;
-    *error1 += y;
+    if (!isNull) {
+        *error1 += y;
+    } else {
+        *error1 = y;
+    }
     return x;
 }
 
@@ -84,38 +89,40 @@ void  TField::calculatedCoord(double time, long long i)
     speedUP.p[0] = 0;
     speedUP.p[1] =0;
     speedUP.p[2] = 0;
-    long long k = 0;
+    long long k = 1;
     for(j = 0; j < i; j++) {
         calculateSpeed_Up(error, errorSpeedUp, &errorA, k);
-        if(k == 100000) {
-            for(long long l = 0; l < 2; l++) {
-                coord.p[l] = TwoSum(coord.p[l], error[l], &error[l]);
+        if(k == 5) {
+            for(int l = 0; l < 2; l++) {
+                coord.p[l] = TwoSum(coord.p[l], error[l], &error[l], true);
             }
-            for(long long l = 0; l < 2; l++) {
-                speed.p[l] = TwoSum(speed.p[l], errorSpeed[l], &errorSpeed[l]);
+            for(int l = 0; l < 2; l++) {
+                speed.p[l] = TwoSum(speed.p[l], errorSpeed[l], &errorSpeed[l], true);
             }
-            k=0;
+
+            k=1;
         }
         //компенсация суммирования для координаты
 
         //x
-        for(long long l = 0; l < 2; l++) {
-            input = TwoSum(speed.p[l]*time, errorSpeed[l]*time, &error[l]);
-            input = TwoSum(speedUP.p[l]*0.5*time*time, input, &error[l]);
-            coord.p[l] = TwoSum(input, coord.p[l], &error[l]);
+        for(int l = 0; l < 2; l++) {
+            input = TwoSum(speed.p[l]*time, errorSpeed[l]*time, &error[l], false);
+            input = TwoSum(speedUP.p[l]*0.5*time*time, input, &error[l], false);
+            coord.p[l] = TwoSum(input, coord.p[l], &error[l], false);
         }
 
         //speed update
 
-        for(long long l = 0; l < 2; l++) {
+        for(int l = 0; l < 2; l++) {
             input = speedUP.p[l] * time;
-            speed.p[l] = TwoSum(input, speed.p[l], &errorSpeed[l]);
+            speed.p[l] = TwoSum(input, speed.p[l], &errorSpeed[l], false);
         }
         k++;
     }
-    for(long long l = 0; l < 2; l++) {
-        coord.p[l] = TwoSum(coord.p[l], error[l], &error[l]);
+    for(int l = 0; l < 2; l++) {
+        coord.p[l] = TwoSum(coord.p[l], error[l], &error[l], true);
     }
+    std::cerr <<  std::endl << (((double)i)*time);
 }
 int main()
 {
@@ -124,7 +131,7 @@ int main()
     double resultx = cos(field.T*(field.speed.p[1]/field.R))*field.R;
     double resulty = sin(field.T*(field.speed.p[1]/field.R))*field.R;
     std::cerr << resultx << "\t" << resulty;
-    for(long long i = 10000000; i < 20000000;i+=100000 ) {
+    for(long long i = 100000000; i < 200000000;i+=100000 ) {
         double time = field.T/(double)i;
         field.calculatedCoord(time, i);
         //fout << field.coord.p[0] << "\t" << field.coord.p[1] << "\t";

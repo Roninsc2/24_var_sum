@@ -11,7 +11,7 @@ public:
 
 private:
     void calculateSpeed_Up(double err[3], double errSpeedUp[3], double* errorA, int k);
-    double TwoSum(double a, double b, double* error1);
+    double TwoSum(double a, double b, double* error1, bool isNull);
     void Compensation(double  tempResult, double  input, double  *result, double  *error);
 
 
