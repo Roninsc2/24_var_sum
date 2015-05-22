@@ -124,13 +124,13 @@ void  TField::calculatedCoord(float time, long long i)
 }
 int main()
 {
-    fout.open("test1.txt");
+    fout.open("float_12.txt");
     TField field;
     float resultx = cos(field.T*(field.speed.p[1]/field.R))*field.R;
     std::cerr << field.K << std::endl;
     float resulty = sin(field.T*(field.speed.p[1]/field.R))*field.R;
     std::cerr << resultx << "\t" << resulty;
-    for (long long i = 10000000; i < 20000000;i+=10000 ) {
+    for (long long i = 17000000; i < 20000000;i+=100000 ) {
         float time = field.T/(float)i;
         field.calculatedCoord(time, i);
         //fout << field.coord.p[0] << "\t" << field.coord.p[1] << "\t";
