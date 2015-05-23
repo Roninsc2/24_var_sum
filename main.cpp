@@ -107,13 +107,14 @@ void  TField::calculatedCoord(float time, long long i)
         for (int l = 0; l < 2; l++) {
             input = TwoSum(speed.p[l]*time, errorSpeed[l]*time, &error[l], false);
             input = TwoSum(speedUP.p[l]*0.5*time*time, input, &error[l], false);
+            input = TwoSum(input, errorSpeedUp[l]*0.5*time*time, &error[l], false);
             coord.p[l] = TwoSum(input, coord.p[l], &error[l], false);
         }
 
         //speed update
 
         for (int l = 0; l < 2; l++) {
-            input = speedUP.p[l] * time;
+            input = TwoSum(speedUP.p[l] * time, errorSpeedUp[l] * time, &errorSpeed[l], false);
             speed.p[l] = TwoSum(input, speed.p[l], &errorSpeed[l], false);
         }
         k++;
@@ -124,7 +125,7 @@ void  TField::calculatedCoord(float time, long long i)
 }
 int main()
 {
-    fout.open("float_12.txt");
+    fout.open("float_21.txt");
     TField field;
     float resultx = cos(field.T*(field.speed.p[1]/field.R))*field.R;
     std::cerr << field.K << std::endl;
