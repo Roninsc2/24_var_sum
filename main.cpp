@@ -29,7 +29,6 @@ void TField::calculateSpeed_Up(float err[3], float errSpeedUp[3], float* errorA,
     //вот тут возник вопрос? Как лучше быть с этой погрешностью?
     //есть ли смысл учитываеть errorA в конечном результате?
     //в тестах есть выбросы, когда errorA обнуляется и не обнулятся
-    *errorA = 0;
     float  vectorR = sqrt(input); //+ coord.p[2]*coord.p[2]
     if (vectorR == 0) {
         speedUP.p[0] = 0;
@@ -96,6 +95,7 @@ void  TField::calculatedCoord(float time, long long i)
     for (j = 0; j < i; j++) {
         calculateSpeed_Up(error, errorSpeedUp, &errorA, k);
         if (k == 10) {
+            //каждые 10 шагов избалвляемся от погрешности
             for (int l = 0; l < 2; l++) {
                 coord.p[l] = TwoSum(error[l],coord.p[l],  &error[l], true);
                 speed.p[l] = TwoSum(errorSpeed[l], speed.p[l], &errorSpeed[l], true);
@@ -111,14 +111,7 @@ void  TField::calculatedCoord(float time, long long i)
              //speed update
             input = TwoSum(errorSpeedUp[l] * time,speedUP.p[l] * time, &errorSpeed[l], false);
             speed.p[l] = TwoSum(input, speed.p[l], &errorSpeed[l], false);
-            if (k == 10) {
-                //избавляемся от погрешности каждые 10 шагов
-                coord.p[l] = TwoSum(error[l],coord.p[l],  &error[l], true);
-                speed.p[l] = TwoSum(errorSpeed[l], speed.p[l], &errorSpeed[l], true);
-                k=0;
-            }
         }
-
 
         k++;
     }
@@ -128,7 +121,7 @@ void  TField::calculatedCoord(float time, long long i)
 }
 int main()
 {
-    fout.open("float_51.txt");
+    fout.open("float_21.txt");
     TField field;
     float resultx = cos(field.T*(field.speed.p[1]/field.R))*field.R;
     std::cerr << field.K << std::endl;
