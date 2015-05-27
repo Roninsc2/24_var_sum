@@ -18,12 +18,17 @@ TField::TField()
 
 void TField::calculateSpeed_Up(float err[3], float errSpeedUp[3], float* errorA, int k)
 {
+    //вычисляю ускорение. vectorR - радиус вектор, вычисляется с учитываением погрешности координаты
+    //vectorR = sqrt(координата_x^2 + координата_y^2) - общий вид
     float input = TwoSum(err[0]*err[0], err[1]*err[1], errorA, false);
     input = TwoSum(input, 2*coord.p[0]*err[0], errorA, false);
     input = TwoSum(input, 2*coord.p[1]*err[1], errorA, false);
     input = TwoSum(input, coord.p[0]*coord.p[0], errorA, false);
     input = TwoSum(input, coord.p[1]*coord.p[1], errorA, false);
     input = TwoSum(input, *errorA, errorA, true);
+    //вот тут возник вопрос? Как лучше быть с этой погрешностью?
+    //есть ли смысл учитываеть errorA в конечном результате?
+    //в тестах есть выбросы, когда errorA обнуляется и не обнулятся
     *errorA = 0;
     float  vectorR = sqrt(input); //+ coord.p[2]*coord.p[2]
     if (vectorR == 0) {
@@ -32,20 +37,17 @@ void TField::calculateSpeed_Up(float err[3], float errSpeedUp[3], float* errorA,
         //speedUP.p[2] = 0;
     }
     else {
+        //раскадываем ускорение по координатам и учитываем погрешность каждые 10 шагов
         float  vectorA = -1*K/(vectorR*vectorR*vectorR);
         for (int l = 0; l < 2; l++) {
              speedUP.p[l] = TwoSum(vectorA *err[l], coord.p[l]*vectorA, &errSpeedUp[l], false);
+             if (k == 10) {
+                 speedUP.p[l] = TwoSum(errSpeedUp[l], speedUP.p[l], &errSpeedUp[l], true);
+             }
         }
-        if (k == 10) {
-            for (int l = 0; l < 2; l++) {
-                //std::cerr << errSpeedUp[l] << std::endl;
-                speedUP.p[l] = TwoSum(errSpeedUp[l], speedUP.p[l], &errSpeedUp[l], true);
-            }
-        }
-        //speedUP.p[2] = coord.p[2] * vectorA;
     }
 }
-
+//компенсация суммирования по Шевчуку
 float TField::TwoSum(float a, float b, float* error1, bool isNull)
 {
     float x = a + b;
@@ -61,7 +63,7 @@ float TField::TwoSum(float a, float b, float* error1, bool isNull)
     }
     return x;
 }
-
+//компенсация по Кэхэну, которая не используется
 void  TField::Compensation(float  tempResult, float  input, float  *result, float  *error)
 {
     float  temp0 = input - *error;
@@ -73,6 +75,8 @@ void  TField::Compensation(float  tempResult, float  input, float  *result, floa
 
 void  TField::calculatedCoord(float time, long long i)
 {
+    //задаем погрешности для скорости, расстояние, ускорения, погрешности от погрешности ускорения
+    //в принципе, ее можно выпилить из функции, если мы ее обнуляем.
     float error[3] = {0,0,0};
     float errorSpeedUp[3] = {0.0,0.0,0.0};
     float errorSpeed[3] = {0.0,0.0,0.0};
@@ -98,10 +102,8 @@ void  TField::calculatedCoord(float time, long long i)
             }
             k=0;
         }
-        //компенсация суммирования для координаты
-
-        //x
         for (int l = 0; l < 2; l++) {
+             //компенсация суммирования для координаты
             input = TwoSum(errorSpeed[l]*time, errorSpeedUp[l]*0.5*time*time, &error[l], false);
             input = TwoSum(input, speed.p[l]*time,  &error[l], false);
             input = TwoSum(input, speedUP.p[l]*0.5*time*time, &error[l], false);
@@ -109,9 +111,15 @@ void  TField::calculatedCoord(float time, long long i)
              //speed update
             input = TwoSum(errorSpeedUp[l] * time,speedUP.p[l] * time, &errorSpeed[l], false);
             speed.p[l] = TwoSum(input, speed.p[l], &errorSpeed[l], false);
+            if (k == 10) {
+                //избавляемся от погрешности каждые 10 шагов
+                coord.p[l] = TwoSum(error[l],coord.p[l],  &error[l], true);
+                speed.p[l] = TwoSum(errorSpeed[l], speed.p[l], &errorSpeed[l], true);
+                k=0;
+            }
         }
 
-        //speed update
+
         k++;
     }
     for (int l = 0; l < 2; l++) {
