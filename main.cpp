@@ -16,20 +16,48 @@ TField::TField()
     //speed.p[2] = 0;
 }
 
-void TField::calculateSpeed_Up(float err[3], float errSpeedUp[3], float* errorA, int k)
+void TField::Split(float a, int s, float& a_hi, float& a_lo)
+{
+    float c = (pow(2, s) + 1)*a;
+    float a_big = c - a;
+    a_hi = c - a_big;
+    a_lo = a - a_hi;
+}
+
+float TField::TwoProduct(float a, float b, float& err)
+{
+    float x = a*b;
+    float a_hi, a_low, b_hi, b_low;
+    Split(a, 16, a_hi, a_low);
+    Split(b, 16, b_hi, b_low);
+    float err1, err2, err3;
+    err1 = x - (a_hi*b_hi);
+    err2 = err1 - (a_low*b_hi);
+    err3 = err2 - (a_hi*b_low);
+    err += ((a_low * b_low) - err3);
+    return x;
+
+}
+
+void TField::calculateSpeed_Up(std::vector<float> err,  std::vector<float>& errorSpeedUp,std::vector<float>& errorSpeedUp3,
+                               std::vector<float>& errorSpeedUp2, std::vector<float>& errorA, std::vector<float>& errorA2 , int k)
 {
     //вычисляю ускорение. vectorR - радиус вектор, вычисляется с учитываением погрешности координаты
     //vectorR = sqrt(координата_x^2 + координата_y^2) - общий вид
-    float input = TwoSum(err[0]*err[0], err[1]*err[1], errorA, false);
-    input = TwoSum(input, 2*coord.p[0]*err[0], errorA, false);
-    input = TwoSum(input, 2*coord.p[1]*err[1], errorA, false);
-    input = TwoSum(input, coord.p[0]*coord.p[0], errorA, false);
-    input = TwoSum(input, coord.p[1]*coord.p[1], errorA, false);
-    input = TwoSum(input, *errorA, errorA, true);
-    //вот тут возник вопрос? Как лучше быть с этой погрешностью?
-    //есть ли смысл учитываеть errorA в конечном результате?
-    //в тестах есть выбросы, когда errorA обнуляется и не обнулятся
-    float  vectorR = sqrt(input); //+ coord.p[2]*coord.p[2]
+    std::vector<float> input;
+    input.resize(3);
+    for (int l=0; l < 2; l++) {
+        float temp =  TwoProduct(2,coord.p[l], errorA[l]);
+        temp = TwoProduct(temp, err[l], errorA[l]);
+        input[l] = TwoSum(TwoProduct(err[l], err[l], errorA[l]),
+                             temp, errorA2[l], false);
+        input[l] = TwoSum(input[l], TwoProduct(coord.p[l],coord.p[l], errorA[l]), errorA2[l], false);
+        errorA2[l] = TwoSum(errorA[l], errorA2[l], errorA[l], true);
+        input[l] = TwoSum(input[l], errorA2[l], errorA2[l], true);
+        errorA2[l] = 0;
+        errorA[l] = 0;
+    }
+    float  vectorR = sqrt(input[0] + input[1]); //+ coord.p[2]*coord.p[2]
     if (vectorR == 0) {
         speedUP.p[0] = 0;
         speedUP.p[1] = 0;
@@ -39,15 +67,17 @@ void TField::calculateSpeed_Up(float err[3], float errSpeedUp[3], float* errorA,
         //раскадываем ускорение по координатам и учитываем погрешность каждые 10 шагов
         float  vectorA = -1*K/(vectorR*vectorR*vectorR);
         for (int l = 0; l < 2; l++) {
-             speedUP.p[l] = TwoSum(vectorA *err[l], coord.p[l]*vectorA, &errSpeedUp[l], false);
-             if (k == 10) {
-                 speedUP.p[l] = TwoSum(errSpeedUp[l], speedUP.p[l], &errSpeedUp[l], true);
-             }
+             speedUP.p[l] = TwoSum(TwoProduct(vectorA, err[l], errorSpeedUp2[l]),
+                                   TwoProduct(vectorA,coord.p[l], errorSpeedUp2[l]), errorSpeedUp[l], false);
+
+             float temp = TwoSum(errorSpeedUp[l], errorSpeedUp2[l], errorSpeedUp2[l], true);
+             errorSpeedUp3[l] = TwoSum(errorSpeedUp3[l],temp, errorSpeedUp[l], true);
+
         }
     }
 }
 //компенсация суммирования по Шевчуку
-float TField::TwoSum(float a, float b, float* error1, bool isNull)
+float TField::TwoSum(float a, float b, float& error1,  bool isNull)
 {
     float x = a + b;
     float b_virt = x - a;
@@ -56,9 +86,9 @@ float TField::TwoSum(float a, float b, float* error1, bool isNull)
     float a_roudnoff = a - a_virt;
     float y = a_roudnoff + b_roundoff;
     if (!isNull) {
-        *error1 += y;
+        error1 += y;
     } else {
-        *error1 = y;
+        error1 = y;
     }
     return x;
 }
@@ -76,10 +106,17 @@ void  TField::calculatedCoord(float time, long long i)
 {
     //задаем погрешности для скорости, расстояние, ускорения, погрешности от погрешности ускорения
     //в принципе, ее можно выпилить из функции, если мы ее обнуляем.
-    float error[3] = {0,0,0};
-    float errorSpeedUp[3] = {0.0,0.0,0.0};
-    float errorSpeed[3] = {0.0,0.0,0.0};
-    float errorA = 0.0;
+    std::vector<float> error(3,0);
+    std::vector<float> errorSpeed(3,0);
+    std::vector<float> errorSpeedUp(3,0);
+    std::vector<float> error2(3,0);
+    std::vector<float> errorSpeed2(3,0);
+    std::vector<float> errorSpeedUp2(3,0);
+    std::vector<float> error3(3,0);
+    std::vector<float> errorSpeed3(3,0);
+    std::vector<float> errorSpeedUp3(3,0);
+    std::vector<float> errorA(3,0);
+    std::vector<float> errorA2(3,0);
 
     coord.p[0] = R;
     coord.p[1] = 0;
@@ -92,31 +129,45 @@ void  TField::calculatedCoord(float time, long long i)
     speedUP.p[1] =0;
     speedUP.p[2] = 0;
     int k = 0;
+    float temp = 0.0;
     for (j = 0; j < i; j++) {
-        calculateSpeed_Up(error, errorSpeedUp, &errorA, k);
-        if (k == 10) {
+        calculateSpeed_Up(error, errorSpeedUp, errorSpeedUp3, errorSpeedUp2, errorA, errorA2, k);
             //каждые 10 шагов избалвляемся от погрешности
             for (int l = 0; l < 2; l++) {
-                coord.p[l] = TwoSum(error[l],coord.p[l],  &error[l], true);
-                speed.p[l] = TwoSum(errorSpeed[l], speed.p[l], &errorSpeed[l], true);
+                coord.p[l] = TwoSum(error3[l],coord.p[l],  error3[l], true);
+                speed.p[l] = TwoSum(errorSpeed3[l], speed.p[l], errorSpeed3[l], true);
             }
-            k=0;
-        }
         for (int l = 0; l < 2; l++) {
              //компенсация суммирования для координаты
-            input = TwoSum(errorSpeed[l]*time, errorSpeedUp[l]*0.5*time*time, &error[l], false);
-            input = TwoSum(input, speed.p[l]*time,  &error[l], false);
-            input = TwoSum(input, speedUP.p[l]*0.5*time*time, &error[l], false);
-            coord.p[l] = TwoSum(input, coord.p[l], &error[l], false);
+            temp = TwoProduct(errorSpeedUp[l], 0.5, error2[l]);
+            temp = TwoProduct(temp, time, error2[l]);
+            temp = TwoProduct(temp, time, error2[l]);
+            input = TwoSum(TwoProduct(errorSpeed[l],time, error2[l]), temp, error[l], false);
+            input = TwoSum(input, TwoProduct(speed.p[l],time, error2[l]),  error[l], false);
+            temp = TwoProduct(speedUP.p[l], 0.5, error2[l]);
+            temp = TwoProduct(temp, time, error2[l]);
+            temp = TwoProduct(temp, time, error2[l]);
+            input = TwoSum(input, temp, error[l], false);
+            temp = TwoSum(error[l], error2[l], error2[l], true);
+            error3[l] = TwoSum(error3[l],temp, error[l], true);
+            coord.p[l] = TwoSum(input, coord.p[l], error3[l], false);
              //speed update
-            input = TwoSum(errorSpeedUp[l] * time,speedUP.p[l] * time, &errorSpeed[l], false);
-            speed.p[l] = TwoSum(input, speed.p[l], &errorSpeed[l], false);
+            input = TwoSum(TwoProduct(errorSpeedUp[l],time, errorSpeed2[l]),
+                           TwoProduct(speedUP.p[l] ,time, errorSpeed2[l]), errorSpeed[l], false);
+            temp = TwoSum(errorSpeed[l], errorSpeed2[l], errorSpeed2[l], true);
+            errorSpeed3[l] = TwoSum(errorSpeed3[l],temp, errorSpeed[l], true);
+            speed.p[l] = TwoSum(input, speed.p[l], errorSpeed3[l], false);
+            speedUP.p[l] = TwoSum(errorSpeedUp3[l], speedUP.p[l], errorSpeedUp3[l], true);
+
         }
 
         k++;
     }
     for (int l = 0; l < 2; l++) {
-        coord.p[l] = TwoSum(error[l], coord.p[l],&error[l], true);
+        temp = TwoSum(error[l], error2[l], error2[l], true);
+        error3[l] = TwoSum(error3[l],temp, error[l], true);
+        coord.p[l] = TwoSum(error3[l], coord.p[l],error3[l], true);
+
     }
 }
 int main()
@@ -127,14 +178,14 @@ int main()
     std::cerr << field.K << std::endl;
     float resulty = sin(field.T*(field.speed.p[1]/field.R))*field.R;
     std::cerr << resultx << "\t" << resulty;
-    for (long long i = 17000000; i < 20000000;i+=100000 ) {
+    for (long long i = 90000000; i < 100000000;i+=100000 ) {
         float time = field.T/(float)i;
         field.calculatedCoord(time, i);
         //fout << field.coord.p[0] << "\t" << field.coord.p[1] << "\t";
         //fout  << (field.coord.p[0] - resultx)/resultx << "\t" << (field.coord.p[1] - resulty)/resulty << "\t";
         fout << sqrt((-resultx + field.coord.p[0])*(-resultx + field.coord.p[0])
                      + (-resulty + field.coord.p[1])*(-resulty + field.coord.p[1]))/field.R
-             << "\t";
+               << "\t";
         fout << i << std::endl;
     }
     fout.close();
@@ -252,28 +303,28 @@ void  TField::calculatedCoord(float time, long long i)
 
         //x
         input = speed.p[0]*time + error2SpeedX*time + speedUP.p[0]*0.5*time*time;
-        coord.p[0] = TwoSum(input, coord.p[0], true, &error1X, &error2X);
+        coord.p[0] = TwoSum(input, coord.p[0], true, error1X, error2X);
         coord.p[0] = coord.p[0] + error1X;
 
         //y
         input = speed.p[1]*time + error2SpeedY*time + speedUP.p[1]*0.5*time*time;
-        coord.p[1] = TwoSum(input, coord.p[1], true, &error1Y, &error2Y);
+        coord.p[1] = TwoSum(input, coord.p[1], true, error1Y, error2Y);
         coord.p[1] =coord.p[1] + error1Y;
         //z
         //input = speed.p[2]*time + speedUP.p[2]*0.5*time*time;
-        //Compensation(coord.p[2], input, &coord.p[2], &errorZ);
+        //Compensation(coord.p[2], input, coord.p[2], errorZ);
 
         //speed update
         input = speedUP.p[0] * time;
-        speed.p[0] = TwoSum(input, speed.p[0], true, &error1SpeedX, &error2SpeedX);
+        speed.p[0] = TwoSum(input, speed.p[0], true, error1SpeedX, error2SpeedX);
         speed.p[0] = speed.p[0] + error1SpeedX;
 
         input = speedUP.p[1] * time;
-        speed.p[1] = TwoSum(input, speed.p[1], true, &error1SpeedY, &error2SpeedY);
+        speed.p[1] = TwoSum(input, speed.p[1], true, error1SpeedY, error2SpeedY);
         speed.p[1] = speed.p[1] +  error1SpeedY;
 
         //input = speedUP.p[2] * time;
-        //Compensation(speed.p[2], input, &speed.p[2], &errorSpeedZ);
+        //Compensation(speed.p[2], input, speed.p[2], errorSpeedZ);
         k++;
     }
     coord.p[0] += error2X;

@@ -1,6 +1,7 @@
 #ifndef COORD
 #define COORD
 #include <cmath>
+#include <vector>
 
 class TField
 {
@@ -9,9 +10,12 @@ public:
     TField();
     void calculatedCoord(float dt, long long i);
 
-private:
-    void calculateSpeed_Up(float err[3], float errSpeedUp[3], float* errorA, int k);
-    float TwoSum(float a, float b, float* error1, bool isNull);
+public:
+    void calculateSpeed_Up(std::vector<float> err,  std::vector<float>& errSpeedUp, std::vector<float>& errorSpeedUp3,
+                           std::vector<float>& errorSpeedUp2,  std::vector<float>& errorA,std::vector<float>& errorA2 , int k);
+    float TwoSum(float a, float b, float& error1, bool isNull);
+    void Split(float a, int s, float& a_hi, float& a_lo);
+    float TwoProduct(float a, float b, float& err);
     void Compensation(float  tempResult, float  input, float  *result, float  *error);
 
 
