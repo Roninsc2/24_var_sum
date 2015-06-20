@@ -11,8 +11,8 @@ public:
     void calculatedCoord(float dt, long long i);
 
 public:
-    void calculateSpeed_Up(std::vector<float> err,  std::vector<float>& errSpeedUp, std::vector<float>& errorSpeedUp3,
-                           std::vector<float>& errorSpeedUp2,  std::vector<float>& errorA,std::vector<float>& errorA2 , int k);
+    void calculateSpeed_Up(float err[3],  float(& errorSpeedUp)[3],float(& errorSpeedUp3)[3],
+                           float(&errorSpeedUp2)[3], float(&errorA)[3], float(& errorA2)[3] , int k);
     float TwoSum(float a, float b, float& error1, bool isNull);
     void Split(float a, int s, float& a_hi, float& a_lo);
     float TwoProduct(float a, float b, float& err);
